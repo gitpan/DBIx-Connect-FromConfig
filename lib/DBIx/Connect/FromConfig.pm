@@ -7,50 +7,13 @@ use DBI ();
 
 {
     no strict;
-    $VERSION = '0.04';
+    $VERSION = '0.05';
 }
 
-=head1 NAME
 
-DBIx::Connect::FromConfig - Creates a DB connection from a configuration file
-
-=head1 VERSION
-
-Version 0.04
-
-
-=head1 SYNOPSIS
-
-    use DBI;
-    use DBIx::Connect::FromConfig -in_dbi;
-
-    my $dbh = DBI->connect_from_config(config => $config);
-    # do DBI stuff
-
-or, if you don't want to pollute C<DBI> namespace:
-
-    use DBI;
-    use DBIx::Connect::FromConfig;
-
-    my $dbh = DBIx::Connect::FromConfig->connect(config => $config);
-    # do DBI stuff
-
-
-=head1 DESCRIPTION
-
-C<DBIx::Connect::FromConfig> provides a generic way to connect to a 
-database using settings from a configuration object.
-
-
-=head1 EXPORT
-
-This module does not export any function, but if given the C<-in_dbi> 
-import option, it will install an alias of the C<connect()> function 
-in the C<DBI> namespace, thus allowing it to be called as a method of 
-C<DBI> (see the synopsis).
-
-=cut
-
+#
+# import()
+# ------
 sub import {
     if (grep { /^-in_dbi$/i } @_) {
         *DBI::connect_from_config = \&connect
@@ -58,115 +21,18 @@ sub import {
 }
 
 
-=head1 FUNCTIONS
-
-=head2 connect()
-
-Try to connect to a database using DBI and return the corresponding object.
-
-B<Settings>
-
-=over
-
-=item *
-
-C<driver> - the name of the C<DBI> driver for the database. This parameter 
-is mandatory.
-
-=item *
-
-C<database> the name of the database. This parameter is mandatory.
-
-=item *
-
-C<host> - the hostname of the database. May be empty.
-
-=item *
-
-C<port> - the port of the database. May be empty.
-
-=item *
-
-C<options> - C<DBD> options, given as a plain string.
-
-=item *
-
-C<username> - the user name used to connect to the database. Defaults to the 
-current user.
-
-=item *
-
-C<password> - the password used to connect to the database. May be empty.
-
-=back
-
-
-B<Parameters>
-
-=over
-
-=item *
-
-C<config> - expects something that contains the settings: 
-
-=over
-
-=item *
-
-a hash reference with the settings stored as first-level keys.
-
-=item *
-
-a C<Config::IniFiles> object; the settings must be available from 
-the section named as given by the C<section> parameter.
-
-=item *
-
-a C<Config::Simple> object; the settings must be available from 
-the section named as given by the C<section> parameter.
-
-=item *
-
-a C<Config::Tiny> object; the settings must be available from 
-the section named as given by the C<section> parameter.
-
-=back
-
-=item *
-
-C<section> - name of the section to look for the database settings; 
-defaults to C<"database">
-
-=back
-
-B<Examples>
-
-Connect to a database, passing the settings in a plain hash reference:
-
-    my %settings = (
-        driver      => 'Pg', 
-        host        => 'bigapp-db.society.com', 
-        database    => 'bigapp', 
-        username    => 'appuser', 
-        password    => 'sekr3t', 
-    );
-
-    my $dbh = DBI->connect_from_config(config => \%settings);
-
-Connect to a database, passing the settings from a configuration file:
-
-    my $config = Config::IniFiles->new(-file => '/etc/hebex/mail.conf');
-    my $dbh = DBI->connect_from_config(config => $config);
-
-=cut
-
+#
+# connect()
+# -------
 sub connect {
     my ($class, @args) = @_;
     croak "error: No parameter given" unless @args;
     croak "error: Odd number of arguments" if @args % 2 != 0;
 
     my %args = @args;
-    my @params = qw(driver host port database options username password);
+    my @params = qw<
+        driver host port database options username password attributes
+    >;
 
     my %db = ();
     my %db_param_name = (
@@ -220,21 +86,203 @@ sub connect {
         croak "error: Unknown type of configuration"
     }
 
+    # check mandatory values
     $db{driver} or croak "error: Database driver not specified";
     exists $db_param_name{$db{driver}}
-        or croak "error: Database driver $db{driver} not supported";
-    $db{username} ||= getpwuid($<);
+        or croak "error: Database driver \Q$db{driver}\E not supported";
 
-    my $dbs = sprintf "dbi:$db{driver}:%s%s%s=%s%s", 
-        ( $db{host} ? "host=$db{host};" : '' ), 
-        ( $db{port} ? "port=$db{port};" : '' ), 
-        $db_param_name{$db{driver}}, $db{database}, 
+    # default values
+    $db{database}   = "" unless defined $db{database};
+    $db{host}       = "" unless defined $db{host};
+    $db{port}       = "" unless defined $db{port};
+    $db{options}    = "" unless defined $db{options};
+    $db{username}   = "" unless defined $db{username};
+    $db{password}   = "" unless defined $db{password};
+    $db{attributes} ||= {};
+
+    # handle DBI attributes
+    if (ref $db{attributes}) {
+        croak "error: DBI attributes must be given as a hashref or a string"
+            unless ref $db{attributes} eq "HASH";
+    }
+    else {
+        # copied from DBI::parse_dsn()
+        $db{attributes} = { split /\s*=>?\s*|\s*,\s*/, $db{attributes}, -1 };
+    }
+
+    # construct the DSN
+    my $dsn = sprintf "dbi:$db{driver}:%s%s%s=%s%s",
+        ( $db{host} ? "host=$db{host};" : '' ),
+        ( $db{port} ? "port=$db{port};" : '' ),
+        $db_param_name{$db{driver}}, $db{database},
         ( $db{options} ? ";$db{options}" : '' );
 
-    my $dbh = DBI->connect($dbs, $db{username}, $db{password});
+    my $dbh = DBI->connect($dsn, $db{username}, $db{password}, $db{attributes});
 
     return $dbh
 }
+
+
+1; # End of DBIx::Connect::FromConfig
+
+
+__END__
+
+=head1 NAME
+
+DBIx::Connect::FromConfig - Creates a DB connection from a configuration file
+
+=head1 VERSION
+
+Version 0.05
+
+
+=head1 SYNOPSIS
+
+    use DBI;
+    use DBIx::Connect::FromConfig -in_dbi;
+
+    my $dbh = DBI->connect_from_config(config => $config);
+    # do DBI stuff
+
+or, if you don't want to pollute C<DBI> namespace:
+
+    use DBI;
+    use DBIx::Connect::FromConfig;
+
+    my $dbh = DBIx::Connect::FromConfig->connect(config => $config);
+    # do DBI stuff
+
+
+=head1 DESCRIPTION
+
+C<DBIx::Connect::FromConfig> provides a generic way to connect to a 
+database using settings from a configuration object.
+
+
+=head1 EXPORT
+
+This module does not export any function, but if given the C<-in_dbi> 
+import option, it will install an alias of the C<connect()> function 
+in the C<DBI> namespace, thus allowing it to be called as a method of 
+C<DBI> (see the synopsis).
+
+
+=head1 FUNCTIONS
+
+=head2 connect()
+
+Try to connect to a database using DBI and return the corresponding object.
+
+B<Settings>
+
+=over
+
+=item *
+
+C<driver> - the name of the C<DBI> driver for the database. This parameter 
+is mandatory.
+
+=item *
+
+C<database> the name of the database. This parameter is mandatory.
+
+=item *
+
+C<host> - the hostname of the database. May be empty.
+
+=item *
+
+C<port> - the port of the database. May be empty.
+
+=item *
+
+C<options> - C<DBD> options, given as a plain string. Will be appended
+at the end of the constructed DSN.
+
+=item *
+
+C<username> - the user name used to connect to the database. Defaults to the 
+current user.
+
+=item *
+
+C<password> - the password used to connect to the database. May be empty.
+
+=item *
+
+C<attributes> - C<DBI> attributes, like C<RaiseError> or C<AutoCommit>.
+
+=back
+
+
+B<Parameters>
+
+=over
+
+=item *
+
+C<config> - expects something that contains the settings: 
+
+=over
+
+=item *
+
+a hash reference with the settings stored as first-level keys.
+
+=item *
+
+a C<Config::IniFiles> object; the settings must be available from 
+the section named as given by the C<section> parameter.
+
+=item *
+
+a C<Config::Simple> object; the settings must be available from 
+the section named as given by the C<section> parameter.
+
+=item *
+
+a C<Config::Tiny> object; the settings must be available from 
+the section named as given by the C<section> parameter.
+
+=back
+
+=item *
+
+C<section> - name of the section to look for the database settings; 
+defaults to C<"database">
+
+=back
+
+B<Examples>
+
+Connect to a database, passing the settings in a plain hash reference:
+
+    my %settings = (
+        driver      => 'Pg', 
+        host        => 'bigapp-db.society.com', 
+        database    => 'bigapp', 
+        username    => 'appuser', 
+        password    => 'sekr3t', 
+        attributes  => { AutoCommit => 1, RaiseError => 1 },
+    );
+
+    my $dbh = DBI->connect_from_config(config => \%settings);
+
+Connect to a database, passing the settings from a configuration file:
+
+    my $config = Config::IniFiles->new(-file => '/etc/hebex/mail.conf');
+    my $dbh = DBI->connect_from_config(config => $config);
+
+where the configuration file could look like:
+
+    [database]
+    driver      = Pg
+    host        = bigapp-db.society.com
+    database    = bigapp
+    username    = appuser
+    password    = sekr3t
+    attributes  = AutoCommit=1|RaiseError=1
 
 
 =head1 DIAGNOSTICS
@@ -248,6 +296,10 @@ B<(E)> The setting specifying the database driver was not found or was empty.
 =item C<Database driver %s not supported>
 
 B<(E)> The specified database driver is not supported by this module.
+
+=item C<DBI attributes must be given as a hashref or a string>
+
+B<(E)> The function was given an improper value for the DBI attributes.
 
 =item C<No parameter given>
 
@@ -318,7 +370,4 @@ Copyright 2008 Sébastien Aperghis-Tramoni, all rights reserved.
 This program is free software; you can redistribute it and/or modify it
 under the same terms as Perl itself.
 
-
 =cut
-
-1; # End of DBIx::Connect::FromConfig
