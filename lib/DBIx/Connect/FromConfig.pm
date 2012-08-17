@@ -7,7 +7,7 @@ use DBI ();
 
 {
     no strict;
-    $VERSION = '0.05';
+    $VERSION = '0.06';
 }
 
 
@@ -134,7 +134,7 @@ DBIx::Connect::FromConfig - Creates a DB connection from a configuration file
 
 =head1 VERSION
 
-Version 0.05
+Version 0.06
 
 
 =head1 SYNOPSIS
@@ -282,7 +282,7 @@ where the configuration file could look like:
     database    = bigapp
     username    = appuser
     password    = sekr3t
-    attributes  = AutoCommit=1|RaiseError=1
+    attributes  = AutoCommit=1,RaiseError=1
 
 
 =head1 DIAGNOSTICS
@@ -365,7 +365,7 @@ L<http://search.cpan.org/dist/DBIx-Connect-FromConfig>
 
 =head1 COPYRIGHT & LICENSE
 
-Copyright 2008 Sébastien Aperghis-Tramoni, all rights reserved.
+Copyright 2008-2012 SE<eacute>bastien Aperghis-Tramoni, all rights reserved.
 
 This program is free software; you can redistribute it and/or modify it
 under the same terms as Perl itself.

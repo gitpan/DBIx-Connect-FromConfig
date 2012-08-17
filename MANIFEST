@@ -13,3 +13,4 @@ t/files/mock-custom.ini
 t/files/mock-default.ini
 t/pod-coverage.t
 t/pod.t
+META.json
