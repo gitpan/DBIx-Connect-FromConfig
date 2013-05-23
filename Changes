@@ -1,5 +1,9 @@
 Revision history for DBIx-Connect-FromConfig
 
+0.07    2013.05.23 (SAPER)
+        [DIST] Add meta-information in Makefile.PL
+        [TESTS] Fix an incorrect number of tests in a skip().
+
 0.06    2012.08.17 (SAPER)
         [DOC] CPAN-RT #70297: Pipe character not recognised in attributes
         [DOC] CPAN-RT #79039: Non-ASCII character seen before =encoding
